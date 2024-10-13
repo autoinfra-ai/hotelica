@@ -86,6 +86,13 @@ resource "aws_security_group" "perplexica_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  ingress {
+    from_port   = 3000  // Add this rule for the container port
+    to_port     = 3000
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -147,22 +154,49 @@ resource "aws_lb" "perplexica_lb" {
   depends_on = [aws_internet_gateway.perplexica_igw]
 }
 
-resource "aws_lb_target_group" "perplexica_tg" {
-  name        = "perplexica-tg"
+# Frontend Target Group
+resource "aws_lb_target_group" "perplexica_frontend_tg" {
+  name        = "perplexica-frontend-tg"
   port        = 3000
   protocol    = "HTTP"
   target_type = "ip"
   vpc_id      = aws_vpc.perplexica_vpc.id
 
   health_check {
+    path                = "/"
     healthy_threshold   = 2
     unhealthy_threshold = 10
     timeout             = 30
     interval            = 60
-    path                = "/"
+    matcher             = "200-399"
   }
 }
 
+# Backend Target Group
+resource "aws_lb_target_group" "perplexica_backend_tg" {
+  name        = "perplexica-backend-tg"
+  port        = 3001
+  protocol    = "HTTP"
+  target_type = "ip"
+  vpc_id      = aws_vpc.perplexica_vpc.id
+
+  health_check {
+    path                = "/api/health"  # Ensure this endpoint exists in your backend
+    healthy_threshold   = 2
+    unhealthy_threshold = 10
+    timeout             = 30
+    interval            = 60
+    matcher             = "200-399"
+  }
+
+  stickiness {
+    type            = "lb_cookie"
+    cookie_duration = 86400
+    enabled         = true
+  }
+}
+
+# HTTP Listener (Redirect to HTTPS)
 resource "aws_lb_listener" "perplexica_listener_http" {
   load_balancer_arn = aws_lb.perplexica_lb.arn
   port              = "80"
@@ -178,6 +212,7 @@ resource "aws_lb_listener" "perplexica_listener_http" {
   }
 }
 
+# HTTPS Listener
 resource "aws_lb_listener" "perplexica_listener_https" {
   load_balancer_arn = aws_lb.perplexica_lb.arn
   port              = "443"
@@ -187,10 +222,44 @@ resource "aws_lb_listener" "perplexica_listener_https" {
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.perplexica_tg.arn
+    target_group_arn = aws_lb_target_group.perplexica_frontend_tg.arn
   }
 
   depends_on = [aws_acm_certificate_validation.perplexica_cert_validation]
+}
+
+# WebSocket Listener Rule
+resource "aws_lb_listener_rule" "websocket" {
+  listener_arn = aws_lb_listener.perplexica_listener_https.arn
+  priority     = 90
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.perplexica_backend_tg.arn
+  }
+
+  condition {
+    path_pattern {
+      values = ["/ws", "/ws/*"]
+    }
+  }
+}
+
+# API Listener Rule
+resource "aws_lb_listener_rule" "api" {
+  listener_arn = aws_lb_listener.perplexica_listener_https.arn
+  priority     = 100
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.perplexica_backend_tg.arn
+  }
+
+  condition {
+    path_pattern {
+      values = ["/api/*"]
+    }
+  }
 }
 
 # ECS Cluster
@@ -201,6 +270,10 @@ resource "aws_ecs_cluster" "perplexica_cluster" {
     name  = "containerInsights"
     value = "enabled"
   }
+}
+# Add this locals block at the top of your file or before the aws_ecs_task_definition resource
+locals {
+  task_definition_hash = filemd5("${path.module}/../.aws/task-definition.json")
 }
 
 # ECS Task Definition
@@ -213,9 +286,25 @@ resource "aws_ecs_task_definition" "perplexica_task" {
   execution_role_arn       = aws_iam_role.ecs_execution_role.arn
   task_role_arn            = aws_iam_role.ecs_task_role.arn
 
+  runtime_platform {
+    operating_system_family = "LINUX"
+    cpu_architecture        = "ARM64"
+  }
+
+  # Use the hash in the container_definitions argument
   container_definitions = jsonencode(
     jsondecode(file("${path.module}/../.aws/task-definition.json")).containerDefinitions
   )
+
+  # Add this line to create a dependency on the file's content
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  # Use the hash as a tag to force updates when the file changes
+  tags = {
+    task_definition_hash = local.task_definition_hash
+  }
 }
 
 # ECS Service
@@ -223,8 +312,9 @@ resource "aws_ecs_service" "perplexica_service" {
   name            = "perplexica-service"
   cluster         = aws_ecs_cluster.perplexica_cluster.id
   task_definition = aws_ecs_task_definition.perplexica_task.arn
-  desired_count   = 2
+  desired_count   = 1
   launch_type     = "FARGATE"
+  health_check_grace_period_seconds = 300
 
   network_configuration {
     subnets          = [aws_subnet.perplexica_subnet_1.id, aws_subnet.perplexica_subnet_2.id]
@@ -233,9 +323,15 @@ resource "aws_ecs_service" "perplexica_service" {
   }
 
   load_balancer {
-    target_group_arn = aws_lb_target_group.perplexica_tg.arn
+    target_group_arn = aws_lb_target_group.perplexica_frontend_tg.arn
     container_name   = "perplexica-frontend"
     container_port   = 3000
+  }
+
+  load_balancer {
+    target_group_arn = aws_lb_target_group.perplexica_backend_tg.arn
+    container_name   = "perplexica-backend"
+    container_port   = 3001
   }
 
   depends_on = [aws_lb_listener.perplexica_listener_https]
@@ -298,11 +394,6 @@ resource "aws_iam_role" "ecs_execution_role" {
   })
 }
 
-resource "aws_iam_role_policy_attachment" "ecs_execution_role_policy" {
-  role       = aws_iam_role.ecs_execution_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
-}
-
 resource "aws_iam_role" "ecs_task_role" {
   name = "ecs_task_role"
 
@@ -320,9 +411,89 @@ resource "aws_iam_role" "ecs_task_role" {
   })
 }
 
+# Consolidated IAM policy for ECS execution role
+resource "aws_iam_policy" "ecs_execution_policy" {
+  name        = "ecs_execution_policy"
+  path        = "/"
+  description = "Consolidated policy for ECS task execution including SSM, ECR, and CloudWatch Logs access"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ecr:GetAuthorizationToken",
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "${aws_cloudwatch_log_group.perplexica_logs.arn}:*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameters",
+          "ssm:GetParameter"
+        ]
+        Resource = aws_ssm_parameter.OPENAI_API_KEY.arn
+      }
+    ]
+  })
+}
+
+# Attach the consolidated policy to the ECS execution role
+resource "aws_iam_role_policy_attachment" "ecs_execution_role_policy" {
+  role       = aws_iam_role.ecs_execution_role.name
+  policy_arn = aws_iam_policy.ecs_execution_policy.arn
+}
+
+# Attach the AmazonECSTaskExecutionRolePolicy to the ECS execution role
+resource "aws_iam_role_policy_attachment" "ecs_execution_role_default_policy" {
+  role       = aws_iam_role.ecs_execution_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+# IAM policy for ECS task role
+resource "aws_iam_policy" "ecs_task_policy" {
+  name        = "ecs_task_policy"
+  path        = "/"
+  description = "Policy for ECS tasks"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ecs:ListTasks",
+          "ecs:DescribeTasks"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+# Attach the ECS task policy to the ECS task role
 resource "aws_iam_role_policy_attachment" "ecs_task_role_policy" {
   role       = aws_iam_role.ecs_task_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+  policy_arn = aws_iam_policy.ecs_task_policy.arn
+}
+
+# Create a parameter in Systems Manager Parameter Store
+resource "aws_ssm_parameter" "OPENAI_API_KEY" {
+  name  = "/perplexica/OPENAI_API_KEY"
+  type  = "SecureString"
+  value = var.OPENAI_API_KEY
 }
 
 # CloudWatch Alarms

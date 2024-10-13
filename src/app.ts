@@ -52,7 +52,7 @@ app.use((req, res, next) => {
 });
 
 app.use('/api', routes);
-app.get('/api', (_, res) => {
+app.get('/api/health', (_, res) => {
   res.status(200).json({ status: 'ok' });
 });
 
@@ -62,6 +62,8 @@ app.get('/metrics', async (req, res) => {
   const metrics = await register.metrics();
   res.end(metrics);
 });
+
+
 
 server.listen(port, () => {
   logger.info(`Server is running on port ${port}`);
