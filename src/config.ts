@@ -34,11 +34,11 @@ export const getPort = () => loadConfig().GENERAL.PORT;
 export const getSimilarityMeasure = () =>
   loadConfig().GENERAL.SIMILARITY_MEASURE;
 
-export const getOpenaiApiKey = () => loadConfig().API_KEYS.OPENAI;
+export const getOpenaiApiKey = () => process.env.OPENAI_API_KEY || loadConfig().API_KEYS.OPENAI;
 
-export const getGroqApiKey = () => loadConfig().API_KEYS.GROQ;
+export const getGroqApiKey = () => process.env.GROQ_API_KEY || loadConfig().API_KEYS.GROQ;
 
-export const getAnthropicApiKey = () => loadConfig().API_KEYS.ANTHROPIC;
+export const getAnthropicApiKey = () => process.env.ANTHROPIC_API_KEY || loadConfig().API_KEYS.ANTHROPIC;
 
 export const getSearxngApiEndpoint = () =>
   process.env.SEARXNG_API_URL || loadConfig().API_ENDPOINTS.SEARXNG;
