@@ -37,3 +37,19 @@ Thumbs.db
 # Db
 db.sqlite
 /searxng
+venv/
+
+# Terraform
+.terraform/
+terraform.tfstate
+terraform.tfstate.*.backup
+terraform.tfstate.backup
+*.tfvars
+*.tfvars.json
+*.tfplan
+*.tfstate.lock.info
+.plan
+*.tfvars.tfvars
+*.tfvars.json.tfvars
+*.tfstate.d
+*.tfstate.lock.hcl
