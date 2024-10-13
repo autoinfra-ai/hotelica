@@ -166,7 +166,7 @@ const useSocket = (
         const timeoutId = setTimeout(() => {
           if (ws.readyState !== 1) {
             toast.error(
-              'Failed to connect to the server. Please try again later.',
+              'Session timed out. Try again, or pick up from where you left off in Library.',
             );
           }
         }, 10000);
