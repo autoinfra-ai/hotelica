@@ -13,6 +13,6 @@
     "skipLibCheck": true,
     "skipDefaultLibCheck": true
   },
-  "include": ["src"],
+  "include": ["src", "ui/lib/functions.ts"],
   "exclude": ["node_modules", "**/*.spec.ts"]
 }

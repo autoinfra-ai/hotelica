@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import { useSearchParams } from 'next/navigation';
 import { getSuggestions, getFunctions } from '@/lib/actions';
 import Error from 'next/error';
-import { functions } from '../../src/lib/functions';
+import { functions } from '@/lib/functions';
 
 export type Message = {
   messageId: string;

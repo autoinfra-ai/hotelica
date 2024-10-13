@@ -1,5 +1,5 @@
 import React from 'react';
-import { functions } from '../../src/lib/functions';
+import { functions } from '@/lib/functions';
 
 interface FunctionButtonProps {
   functionName: string;
