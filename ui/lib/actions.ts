@@ -20,3 +20,24 @@ export const getSuggestions = async (chatHisory: Message[]) => {
 
   return data.suggestions;
 };
+
+export const getFunctions = async (chatHistory: Message[]) => {
+  const chatModel = localStorage.getItem('chatModel');
+  const chatModelProvider = localStorage.getItem('chatModelProvider');
+
+  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/functions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      chat_history: chatHistory,
+      chat_model: chatModel,
+      chat_model_provider: chatModelProvider,
+    }),
+  });
+
+  const data = (await res.json()) as { functions: string[] };
+
+  return data.functions;
+};

@@ -19,6 +19,7 @@ import MessageSources from './MessageSources';
 import SearchImages from './SearchImages';
 import SearchVideos from './SearchVideos';
 import { useSpeech } from 'react-text-to-speech';
+import FunctionButton from './FunctionButton';
 
 const MessageBox = ({
   message,
@@ -29,6 +30,8 @@ const MessageBox = ({
   isLast,
   rewrite,
   sendMessage,
+  functionSuggestions,
+  executeFunction,
 }: {
   message: Message;
   messageIndex: number;
@@ -38,6 +41,8 @@ const MessageBox = ({
   isLast: boolean;
   rewrite: (messageId: string) => void;
   sendMessage: (message: string) => void;
+  functionSuggestions: string[];
+  executeFunction: (functionName: string) => void;
 }) => {
   const [parsedMessage, setParsedMessage] = useState(message.content);
   const [speechMessage, setSpeechMessage] = useState(message.content);
@@ -195,6 +200,29 @@ const MessageBox = ({
           </div>
         </div>
       )}
+      {isLast &&
+        message.role === 'assistant' &&
+        !loading &&
+        (functionSuggestions.length > 0) && (
+          <>
+            <div className="h-px w-full bg-light-secondary dark:bg-dark-secondary" />
+            <div className="flex flex-col space-y-3 text-black dark:text-white lg:w-9/12">
+              {/* <div className="flex flex-row items-center space-x-2 mt-4">
+                <Layers3 />
+                <h3 className="text-xl font-medium">Functions</h3>
+              </div> */}
+              <div className="mt-4 flex flex-wrap gap-2">
+                {functionSuggestions.map((functionName, i) => (
+                  <FunctionButton
+                    key={i}
+                    functionName={functionName}
+                    executeFunction={executeFunction}
+                  />
+                ))}
+              </div>
+            </div>
+          </>
+        )}
     </div>
   );
 };

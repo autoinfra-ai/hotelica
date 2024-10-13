@@ -8,8 +8,9 @@ import EmptyChat from './EmptyChat';
 import crypto from 'crypto';
 import { toast } from 'sonner';
 import { useSearchParams } from 'next/navigation';
-import { getSuggestions } from '@/lib/actions';
+import { getSuggestions, getFunctions } from '@/lib/actions';
 import Error from 'next/error';
+import { functions } from '../../src/lib/functions';
 
 export type Message = {
   messageId: string;
@@ -283,6 +284,7 @@ const ChatWindow = ({ id }: { id?: string }) => {
   const [isMessagesLoaded, setIsMessagesLoaded] = useState(false);
 
   const [notFound, setNotFound] = useState(false);
+  const [functionSuggestions, setFunctionSuggestions] = useState<string[]>([]);
 
   useEffect(() => {
     if (
@@ -439,15 +441,20 @@ const ChatWindow = ({ id }: { id?: string }) => {
           lastMsg.sources.length > 0 &&
           !lastMsg.suggestions
         ) {
-          const suggestions = await getSuggestions(messagesRef.current);
-          setMessages((prev) =>
-            prev.map((msg) => {
-              if (msg.messageId === lastMsg.messageId) {
-                return { ...msg, suggestions: suggestions };
-              }
-              return msg;
-            }),
-          );
+          const fetchSuggestionsAndFunctions = async () => {
+            const suggestions = await getSuggestions(messagesRef.current);
+            const functionSuggestions = await getFunctions(messagesRef.current);
+            setMessages((prev) =>
+              prev.map((msg) => {
+                if (msg.messageId === lastMsg.messageId) {
+                  return { ...msg, suggestions: suggestions };
+                }
+                return msg;
+              }),
+            );
+            setFunctionSuggestions(functionSuggestions);
+          };
+          fetchSuggestionsAndFunctions();
         }
       }
     };
@@ -470,6 +477,12 @@ const ChatWindow = ({ id }: { id?: string }) => {
     });
 
     sendMessage(message.content);
+  };
+
+  const executeFunction = (functionName: string) => {
+    if (functions[functionName]) {
+      functions[functionName].execute();
+    }
   };
 
   useEffect(() => {
@@ -503,6 +516,8 @@ const ChatWindow = ({ id }: { id?: string }) => {
               sendMessage={sendMessage}
               messageAppeared={messageAppeared}
               rewrite={rewrite}
+              functionSuggestions={functionSuggestions}
+              executeFunction={executeFunction}
             />
           </>
         ) : (
