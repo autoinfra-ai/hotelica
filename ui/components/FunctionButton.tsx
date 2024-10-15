@@ -16,16 +16,17 @@ const FunctionButton: React.FC<FunctionButtonProps> = ({
     return null;
   }
 
-  // Define a maximum length for the description before truncation
-  const MAX_DESCRIPTION_LENGTH = 50;
+  const MAX_DESCRIPTION_LENGTH = 60;
 
   return (
     <button
       onClick={() => executeFunction(functionName)}
-      className="flex-1 min-w-[150px] max-w-[300px] h-auto px-4 py-2 bg-transparent text-black dark:text-white border border-white/20 rounded-md hover:bg-white/10 transition-colors flex flex-col items-start justify-center"
+      className="group w-full max-w-xs p-3 text-left bg-transparent border border-gray-200 dark:border-gray-800 rounded-lg transition-all duration-200 hover:bg-gray-50 dark:hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
     >
-      <span className="font-medium">{functionInfo.name}</span>
-      <span className="text-xs text-black/60 dark:text-white/60 mt-1">
+      <span className="block text-sm font-medium text-gray-900 dark:text-gray-100 mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400">
+        {functionInfo.name}
+      </span>
+      <span className="block text-xs text-gray-500 dark:text-gray-400">
         {functionInfo.description.length > MAX_DESCRIPTION_LENGTH 
           ? `${functionInfo.description.slice(0, MAX_DESCRIPTION_LENGTH)}...` 
           : functionInfo.description}

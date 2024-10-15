@@ -291,48 +291,7 @@ resource "aws_ecs_cluster" "perplexica_cluster" {
   }
 }
 
-locals {
-  task_definition_template = file("${path.module}/../.aws/task-definition.json")
-  
-  task_definition = jsondecode(templatefile("${path.module}/../.aws/task-definition.json", {
-    aws_iam_role_ecs_execution_role_arn = aws_iam_role.ecs_execution_role.arn
-    aws_iam_role_ecs_task_role_arn = aws_iam_role.ecs_task_role.arn
-    efs_file_system_id = aws_efs_file_system.searxng_data.id
-    // Add any other variables your task definition uses
-  }))
-}
-
-# ECS Task Definition
-resource "aws_ecs_task_definition" "perplexica_task" {
-  family                   = local.task_definition.family
-  network_mode             = local.task_definition.networkMode
-  requires_compatibilities = local.task_definition.requiresCompatibilities
-  cpu                      = local.task_definition.cpu
-  memory                   = local.task_definition.memory
-  execution_role_arn       = local.task_definition.executionRoleArn
-  task_role_arn            = local.task_definition.taskRoleArn
-
-  container_definitions = jsonencode(local.task_definition.containerDefinitions)
-
-  dynamic "volume" {
-    for_each = try(local.task_definition.volumes, [])
-    content {
-      name = volume.value.name
-      
-      efs_volume_configuration {
-        file_system_id = volume.value.efsVolumeConfiguration.fileSystemId
-        root_directory = volume.value.efsVolumeConfiguration.rootDirectory
-      }
-    }
-  }
-
-  runtime_platform {
-    operating_system_family = "LINUX"
-    cpu_architecture        = "ARM64"
-  }
-}
-
-# ECS Service
+# Update the ECS Service to use the task definition from task_definition.tf
 resource "aws_ecs_service" "perplexica_service" {
   name            = "perplexica-service"
   cluster         = aws_ecs_cluster.perplexica_cluster.id
@@ -521,7 +480,7 @@ resource "aws_iam_role_policy_attachment" "ecs_task_role_policy" {
   policy_arn = aws_iam_policy.ecs_task_policy.arn
 }
 
-# Create a parameter in Systems Manager Parameter Store
+# SSM Parameters
 resource "aws_ssm_parameter" "OPENAI_API_KEY" {
   name  = "/perplexica/OPENAI_API_KEY"
   type  = "SecureString"
