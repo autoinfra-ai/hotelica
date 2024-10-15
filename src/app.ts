@@ -71,10 +71,39 @@ server.listen(port, () => {
 
 startWebSocketServer(server);
 
+// Handle uncaught exceptions to prevent the application from crashing
 process.on('uncaughtException', (err, origin) => {
-  logger.error(`Uncaught Exception at ${origin}: ${err}`);
+  logger.error(`
+    An uncaught exception occurred in the application.
+    This is a critical error that was not handled by any try-catch block.
+    
+    Error details:
+    - Origin: ${origin}
+    - Error message: ${err.message}
+    - Stack trace: ${err.stack}
+    
+    This error should be investigated immediately as it may indicate a serious issue in the application.
+    Consider adding appropriate error handling to prevent such exceptions from occurring.
+  `);
+  
+  // Optionally, you might want to perform cleanup operations or restart the application here
+  // process.exit(1); // Uncomment this line if you want to terminate the application after logging
 });
 
+// Handle unhandled promise rejections to prevent the Node.js process from terminating
 process.on('unhandledRejection', (reason, promise) => {
-  logger.error(`Unhandled Rejection at: ${promise}, reason: ${reason}`);
+  logger.error(`
+    An unhandled promise rejection was detected in the application.
+    This means a Promise was rejected without a .catch() handler to process the error.
+    
+    Rejection details:
+    - Promise: ${JSON.stringify(promise, null, 2)}
+    - Reason: ${reason instanceof Error ? reason.stack : reason}
+    
+    To fix this, ensure all Promises have proper error handling with .catch() blocks or try-catch in async functions.
+    Unhandled rejections can lead to memory leaks and unexpected application behavior.
+  `);
+  
+  // Optionally, you can choose to terminate the process here
+  // process.exit(1); // Uncomment this line if you want to terminate the application after logging
 });

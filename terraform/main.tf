@@ -66,7 +66,7 @@ resource "aws_route_table_association" "perplexica_rta_2" {
   route_table_id = aws_route_table.perplexica_rt.id
 }
 
-# Security Group
+# Security Group for ECS tasks
 resource "aws_security_group" "perplexica_sg" {
   name        = "perplexica-sg"
   description = "Security group for Perplexica ECS tasks"
@@ -78,27 +78,46 @@ resource "aws_security_group" "perplexica_sg" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
   ingress {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
   ingress {
-    from_port   = 3000  // Add this rule for the container port
+    from_port   = 3000
     to_port     = 3000
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
+  ingress {
+    from_port   = 3001
+    to_port     = 3001
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  ingress {
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
+    self        = true
+  }
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+}
+
+# Add this rule after both security groups are created
+resource "aws_security_group_rule" "perplexica_sg_from_db" {
+  type                     = "ingress"
+  from_port                = 0
+  to_port                  = 65535
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.hotelica_db_sg.id
+  security_group_id        = aws_security_group.perplexica_sg.id
 }
 
 # Use data source to reference the existing Route 53 hosted zone
@@ -271,39 +290,45 @@ resource "aws_ecs_cluster" "perplexica_cluster" {
     value = "enabled"
   }
 }
-# Add this locals block at the top of your file or before the aws_ecs_task_definition resource
+
 locals {
-  task_definition_hash = filemd5("${path.module}/../.aws/task-definition.json")
+  task_definition_template = file("${path.module}/../.aws/task-definition.json")
+  
+  task_definition = jsondecode(templatefile("${path.module}/../.aws/task-definition.json", {
+    aws_iam_role_ecs_execution_role_arn = aws_iam_role.ecs_execution_role.arn
+    aws_iam_role_ecs_task_role_arn = aws_iam_role.ecs_task_role.arn
+    efs_file_system_id = aws_efs_file_system.searxng_data.id
+    // Add any other variables your task definition uses
+  }))
 }
 
 # ECS Task Definition
 resource "aws_ecs_task_definition" "perplexica_task" {
-  family                   = "perplexica-task"
-  network_mode             = "awsvpc"
-  requires_compatibilities = ["FARGATE"]
-  cpu                      = "1024"
-  memory                   = "2048"
-  execution_role_arn       = aws_iam_role.ecs_execution_role.arn
-  task_role_arn            = aws_iam_role.ecs_task_role.arn
+  family                   = local.task_definition.family
+  network_mode             = local.task_definition.networkMode
+  requires_compatibilities = local.task_definition.requiresCompatibilities
+  cpu                      = local.task_definition.cpu
+  memory                   = local.task_definition.memory
+  execution_role_arn       = local.task_definition.executionRoleArn
+  task_role_arn            = local.task_definition.taskRoleArn
+
+  container_definitions = jsonencode(local.task_definition.containerDefinitions)
+
+  dynamic "volume" {
+    for_each = try(local.task_definition.volumes, [])
+    content {
+      name = volume.value.name
+      
+      efs_volume_configuration {
+        file_system_id = volume.value.efsVolumeConfiguration.fileSystemId
+        root_directory = volume.value.efsVolumeConfiguration.rootDirectory
+      }
+    }
+  }
 
   runtime_platform {
     operating_system_family = "LINUX"
     cpu_architecture        = "ARM64"
-  }
-
-  # Use the hash in the container_definitions argument
-  container_definitions = jsonencode(
-    jsondecode(file("${path.module}/../.aws/task-definition.json")).containerDefinitions
-  )
-
-  # Add this line to create a dependency on the file's content
-  lifecycle {
-    create_before_destroy = true
-  }
-
-  # Use the hash as a tag to force updates when the file changes
-  tags = {
-    task_definition_hash = local.task_definition_hash
   }
 }
 
@@ -444,10 +469,17 @@ resource "aws_iam_policy" "ecs_execution_policy" {
           "ssm:GetParameters",
           "ssm:GetParameter"
         ]
-        Resource = aws_ssm_parameter.OPENAI_API_KEY.arn
+        Resource = [
+          aws_ssm_parameter.OPENAI_API_KEY.arn,
+          aws_ssm_parameter.db_url.arn
+        ]
       }
     ]
   })
+  depends_on = [
+    aws_ssm_parameter.db_url,
+    aws_ssm_parameter.OPENAI_API_KEY
+  ]
 }
 
 # Attach the consolidated policy to the ECS execution role
@@ -526,4 +558,20 @@ resource "aws_route53_record" "perplexica_alb" {
     zone_id                = aws_lb.perplexica_lb.zone_id
     evaluate_target_health = true
   }
+}
+
+resource "aws_efs_file_system" "searxng_data" {
+  creation_token = "searxng-data"
+  encrypted      = true
+
+  tags = {
+    Name = "SearxNG Data"
+  }
+}
+
+resource "aws_efs_mount_target" "searxng_data" {
+  count           = 2
+  file_system_id  = aws_efs_file_system.searxng_data.id
+  subnet_id       = count.index == 0 ? aws_subnet.perplexica_subnet_1.id : aws_subnet.perplexica_subnet_2.id
+  security_groups = [aws_security_group.perplexica_sg.id]
 }
