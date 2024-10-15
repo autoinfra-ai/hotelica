@@ -21,6 +21,13 @@ resource "aws_security_group" "hotelica_db_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  ingress {
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    cidr_blocks = ["192.184.250.198/32"]
+  }
+
   tags = {
     Name = "Hotelica DB Security Group"
   }
@@ -40,7 +47,7 @@ resource "aws_security_group_rule" "hotelica_db_sg_from_ecs" {
 resource "aws_db_instance" "hotelica_db" {
   identifier           = "hotelica-db"
   engine               = "postgres"
-  engine_version       = "16.4"  # Latest version aas of now
+  engine_version       = "16.4"  # Latest version as of now
   instance_class       = "db.t4g.micro"
   allocated_storage    = 20
   storage_type         = "gp3"
@@ -55,7 +62,7 @@ resource "aws_db_instance" "hotelica_db" {
   backup_retention_period = 7
   skip_final_snapshot     = true
   multi_az                = false
-  publicly_accessible     = false
+  publicly_accessible     = true
 
   tags = {
     Name = "Hotelica DB"

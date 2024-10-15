@@ -1,8 +1,8 @@
 import express from 'express';
 import logger from '../utils/logger';
-import db from '../db/index';
+import db from '../db/indexpg';
 import { eq } from 'drizzle-orm';
-import { chats, messages } from '../db/schema';
+import { chats, messages } from '../db/schemapg';
 
 const router = express.Router();
 

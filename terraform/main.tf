@@ -108,6 +108,14 @@ resource "aws_security_group" "perplexica_sg" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+  # New ingress rule for the specific IP
+  ingress {
+    from_port   = 0
+    to_port     = 65535
+    protocol    = "tcp"
+    cidr_blocks = ["192.184.250.198/32"]
+    description = "Allow all TCP traffic from specific IP"
+  }
 }
 
 # Add this rule after both security groups are created

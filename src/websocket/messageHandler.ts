@@ -9,8 +9,8 @@ import handleRedditSearch from '../agents/redditSearchAgent';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { Embeddings } from '@langchain/core/embeddings';
 import logger from '../utils/logger';
-import db from '../db';
-import { chats, messages } from '../db/schema';
+import db from '../db/indexpg';
+import { chats, messages } from '../db/schemapg';
 import { eq } from 'drizzle-orm';
 import crypto from 'crypto';
 
@@ -153,7 +153,6 @@ export const handleMessage = async (
             .values({
               id: parsedMessage.chatId,
               title: parsedMessage.content,
-              createdAt: new Date().toString(),
               focusMode: parsedWSMessage.focusMode,
             })
             .execute();

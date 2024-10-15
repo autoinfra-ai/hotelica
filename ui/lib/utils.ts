@@ -25,3 +25,28 @@ export const formatTimeDifference = (
   else
     return `${Math.floor(diffInSeconds / 31536000)} year${Math.floor(diffInSeconds / 31536000) !== 1 ? 's' : ''}`;
 };
+
+interface GeoLocation {
+  city: string;
+  region: string;
+  country_name: string;
+}
+
+export const getLocationFromIP = async (): Promise<string> => {
+  try {
+    const response = await fetch('https://ipapi.co/json/');
+    if (!response.ok) {
+      throw new Error('Failed to fetch location data');
+    }
+    const data: GeoLocation = await response.json();
+    
+    if (data.country_name === 'United States') {
+      return `${data.city}, ${data.region}`;
+    } else {
+      return `${data.city}, ${data.country_name}`;
+    }
+  } catch (error) {
+    console.error('Error fetching location:', error);
+    return 'Unknown Location';
+  }
+};
