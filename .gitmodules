@@ -1,0 +1,3 @@
+[submodule "searxng/searxng"]
+	path = searxng/searxng
+	url = git@github.com:autoinfra-ai/searxng.git

@@ -1,4 +1,4 @@
-FROM node:slim
+FROM node:22-bullseye-slim
 
 WORKDIR /home/perplexica
 

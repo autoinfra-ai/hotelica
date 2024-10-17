@@ -55,9 +55,7 @@ app.use('/api', routes);
 app.get('/api/health', (_, res) => {
   res.status(200).json({ status: 'ok' });
 });
-
-// Expose the metrics at '/metrics' endpoint
-app.get('/metrics', async (req, res) => {
+app.get('/api/metrics', async (req, res) => {
   res.set('Content-Type', register.contentType);
   const metrics = await register.metrics();
   res.end(metrics);

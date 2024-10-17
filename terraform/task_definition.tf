@@ -23,7 +23,7 @@ resource "aws_ecs_task_definition" "perplexica_task" {
   container_definitions = jsonencode([
     {
       name  = "searxng"
-      image = "docker.io/searxng/searxng:latest"
+      image = "406515214055.dkr.ecr.us-east-2.amazonaws.com/searxng-hotelica:arm64"
       portMappings = [
         {
           containerPort = 8080
@@ -58,6 +58,9 @@ resource "aws_ecs_task_definition" "perplexica_task" {
           protocol      = "tcp"
         }
       ]
+      linuxParameters = {
+        initProcessEnabled = true
+      }
       environment = [
         {
           name  = "SEARXNG_API_URL"

@@ -71,3 +71,4 @@ export const updateConfig = (config: RecursivePartial<Config>) => {
     toml.stringify(config),
   );
 };
+

@@ -102,13 +102,20 @@ resource "aws_security_group" "perplexica_sg" {
     protocol    = "tcp"
     self        = true
   }
+  # New rule to allow all internal traffic within the security group
+  ingress {
+    from_port = 0
+    to_port   = 65535
+    protocol  = "tcp"
+    self      = true
+  }
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  # New ingress rule for the specific IP
+  # Specific IP rule (if still needed)
   ingress {
     from_port   = 0
     to_port     = 65535
@@ -177,6 +184,7 @@ resource "aws_lb" "perplexica_lb" {
   subnets            = [aws_subnet.perplexica_subnet_1.id, aws_subnet.perplexica_subnet_2.id]
 
   enable_deletion_protection = true
+  idle_timeout               = 1500  // Set to the maximum value of 4000 seconds (about 66 minutes)
 
   depends_on = [aws_internet_gateway.perplexica_igw]
 }
@@ -307,7 +315,7 @@ resource "aws_ecs_service" "perplexica_service" {
   desired_count   = 1
   launch_type     = "FARGATE"
   health_check_grace_period_seconds = 300
-
+  enable_execute_command = true
   network_configuration {
     subnets          = [aws_subnet.perplexica_subnet_1.id, aws_subnet.perplexica_subnet_2.id]
     assign_public_ip = true
@@ -474,7 +482,11 @@ resource "aws_iam_policy" "ecs_task_policy" {
         Effect = "Allow"
         Action = [
           "ecs:ListTasks",
-          "ecs:DescribeTasks"
+          "ecs:DescribeTasks",
+          "ssmmessages:CreateControlChannel",
+          "ssmmessages:CreateDataChannel",
+          "ssmmessages:OpenControlChannel",
+          "ssmmessages:OpenDataChannel"
         ]
         Resource = "*"
       }
@@ -527,6 +539,15 @@ resource "aws_route53_record" "perplexica_alb" {
   }
 }
 
+# New DNS record for the metrics subdomain
+resource "aws_route53_record" "metrics_subdomain" {
+  zone_id = data.aws_route53_zone.primary.zone_id
+  name    = "metrics.airpursue.com"
+  type    = "A"
+  ttl     = 300
+  records = ["52.14.165.31"]
+}
+
 resource "aws_efs_file_system" "searxng_data" {
   creation_token = "searxng-data"
   encrypted      = true
@@ -536,9 +557,41 @@ resource "aws_efs_file_system" "searxng_data" {
   }
 }
 
+# EFS Security Group
+resource "aws_security_group" "efs_sg" {
+  name        = "perplexica-efs-sg"
+  description = "Security group for EFS mount targets"
+  vpc_id      = aws_vpc.perplexica_vpc.id
+
+  ingress {
+    from_port       = 2049
+    to_port         = 2049
+    protocol        = "tcp"
+    security_groups = [aws_security_group.perplexica_sg.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+# Add this rule to the existing perplexica_sg
+resource "aws_security_group_rule" "efs_outbound" {
+  type              = "egress"
+  from_port         = 2049
+  to_port           = 2049
+  protocol          = "tcp"
+  cidr_blocks       = [aws_vpc.perplexica_vpc.cidr_block]
+  security_group_id = aws_security_group.perplexica_sg.id
+}
+
+# Update the EFS mount targets to use the new security group
 resource "aws_efs_mount_target" "searxng_data" {
   count           = 2
   file_system_id  = aws_efs_file_system.searxng_data.id
   subnet_id       = count.index == 0 ? aws_subnet.perplexica_subnet_1.id : aws_subnet.perplexica_subnet_2.id
-  security_groups = [aws_security_group.perplexica_sg.id]
+  security_groups = [aws_security_group.efs_sg.id]
 }

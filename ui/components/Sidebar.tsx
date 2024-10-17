@@ -72,10 +72,10 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
             className="cursor-pointer"
           />
 
-          <SettingsDialog
+          {/* <SettingsDialog
             isOpen={isSettingsOpen}
             setIsOpen={setIsSettingsOpen}
-          />
+          /> */}
         </div>
       </div>
 
